@@ -44,30 +44,32 @@ def index():
     return render_template("tem.html")
 
 
+
 @app.route("/recommend", methods=["GET"])
 def recommend():
-    """
-    Generate a personalized certification roadmap based on query parameters.
-    Returns an HTML fragment wrapped in <div class="roadmap-phase">….
-    """
-    # Gather user inputs
+    # Collect user inputs
     name  = request.args.get("name", "").strip()
     age   = request.args.get("age", "").strip()
     exp   = request.args.get("experience", "").strip()
     certs = request.args.get("current_certs", "").strip()
     intr  = request.args.get("interest", "").strip()
     tf    = request.args.get("timeframe", "").strip()
-
-    # Build a simple profile text
-    profile = []
-    if name:  profile.append(f"- Name: {name}")
-    if age:   profile.append(f"- Age: {age}")
-    if exp:   profile.append(f"- Experience Level: {exp}")
-    if certs: profile.append(f"- Current Certifications: {certs}")
-    if intr:  profile.append(f"- Areas of Interest: {intr}")
-    profile_text = "\n".join(profile)
-
-    # Save profile in session for later explain-node calls
+   
+    # Build profile details dynamically
+    profile_lines = []
+    if name:
+        profile_lines.append(f"- Name: {name}")
+    if age:
+        profile_lines.append(f"- Age: {age}")
+    if exp:
+        profile_lines.append(f"- Experience Level: {exp}")
+    if certs:
+        profile_lines.append(f"- Current Certifications: {certs}")
+    if intr:
+        profile_lines.append(f"- Areas of Interest: {intr}")
+    profile_text = "\n".join(profile_lines)
+    
+    # Save the user profile into session for later use
     session["user_profile"] = {
         "name": name,
         "age": age,
@@ -75,39 +77,33 @@ def recommend():
         "current_certs": certs,
         "interest": intr
     }
-
-    # Build the prompt asking Gemini to return a self-contained HTML fragment
+    
+    # Build prompt, requesting HTML with roadmap-phase classes
     prompt = f"""
-You are a friendly cybersecurity career advisor.
-Generate a tailored certification roadmap (wrapped in <div class="roadmap-phase">…</div>)
-for the user based on their profile below.
+You are a cybersecurity career advisor with a fun and personal touch. Based on the user's profile, generate a personalized certification roadmap and guidance for that perosn say his name.
+
+**IMPORTANT**: Return a self‑contained HTML fragment only.  
+- Wrap each phase in <div class="roadmap-phase">…</div>.  
+- Use <h2>, <h3>, <ul>, <li> for structure.  
+- No external CSS or JS—just the fragment.
 
 User Profile:
 {profile_text}
-
-Desired Timeframe: {tf}
-
-IMPORTANT:
- - Return only the HTML fragment (no <html>, <head>, or <body> tags).
- - Use <h2>, <h3>, <ul>, <li> for structure.
- - Each phase must live inside its own <div class="roadmap-phase">.
+Desired Roadmap Timeframe: {tf}
 """
 
-    logging.info("Requesting roadmap from Gemini AI…")
+    logging.info("Requesting HTML roadmap from Gemini AI…")
     try:
         resp = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt
         )
-        fragment = resp.text.strip() or "<p>No roadmap generated.</p>"
-        return Response(fragment, mimetype="text/html")
+        html_fragment = resp.text.strip() or "<p>No roadmap generated.</p>"
+        return Response(html_fragment, status=200, mimetype="text/html")
     except Exception as e:
         logging.exception("Error generating roadmap")
-        return Response(
-            f"<p style='color:red;'>Error generating roadmap: {e}</p>",
-            status=500,
-            mimetype="text/html"
-        )
+        return Response(f"<p style='color:red;'>Error: {e}</p>", status=500, mimetype="text/html")
+
 
 
 @app.route("/explain-node", methods=["GET"])
