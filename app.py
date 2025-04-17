@@ -108,55 +108,52 @@ Desired Roadmap Timeframe: {tf}
 
 @app.route("/explain-node", methods=["GET"])
 def explain_node():
-    """
-    Given a data-title from an SVG node, return a concise HTML explanation fragment.
-    """
     title = request.args.get("title", "").strip()
     if not title:
-        return Response("Missing node title", status=400, mimetype="text/plain")
-
-    # Reconstruct profile from session (or query params if provided)
-    profile_data = session.get("user_profile", {})
-    name  = request.args.get("name",  "").strip() or profile_data.get("name", "")
-    age   = request.args.get("age",   "").strip() or profile_data.get("age", "")
-    exp   = request.args.get("experience", "").strip() or profile_data.get("experience", "")
-    certs = request.args.get("current_certs", "").strip() or profile_data.get("current_certs", "")
-    intr  = request.args.get("interest", "").strip() or profile_data.get("interest", "")
-
-    profile = []
-    if name:  profile.append(f"- Name: {name}")
-    if age:   profile.append(f"- Age: {age}")
-    if exp:   profile.append(f"- Experience Level: {exp}")
-    if certs: profile.append(f"- Current Certifications: {certs}")
-    if intr:  profile.append(f"- Areas of Interest: {intr}")
-    profile_text = "\n".join(profile)
-
-    prompt = f"""
-Teach the topic "{title}" in a concise, friendly tutorial style.
-Context:
+        return "Missing node title", 400, {"Content-Type": "text/plain; charset=utf-8"}
+    
+    # Collect optional personal parameters from current request or saved session
+    name          = request.args.get("name", "").strip() or session.get("user_profile", {}).get("name", "")
+    age           = request.args.get("age", "").strip() or session.get("user_profile", {}).get("age", "")
+    experience    = request.args.get("experience", "").strip() or session.get("user_profile", {}).get("experience", "")
+    current_certs = request.args.get("current_certs", "").strip() or session.get("user_profile", {}).get("current_certs", "")
+    interest      = request.args.get("interest", "").strip() or session.get("user_profile", {}).get("interest", "")
+    
+    # Build profile only with non-empty fields
+    profile_lines = []
+    if name:
+        profile_lines.append(f"- Name: {name}")
+    if age:
+        profile_lines.append(f"- Age: {age}")
+    if experience:
+        profile_lines.append(f"- Experience Level: {experience}")
+    if current_certs:
+        profile_lines.append(f"- Current Certifications: {current_certs}")
+    if interest:
+        profile_lines.append(f"- Areas of Interest: {interest}")
+    profile_text = "\n".join(profile_lines)
+    
+    prompt = f"""Teach the topic '{title}' in a concise, personal, and fun tutorial style for {name or 'the user'}.
+User Profile:
 {profile_text}
 
-IMPORTANT:
- - Return only a self-contained HTML fragment.
- - Wrap it in appropriate tags (e.g. <div>, <h2>, <p>).
- - No surrounding document boilerplate.
-"""
+**IMPORTANT**: Return a self-contained HTML fragment only.  
+- Wrap the explanation in appropriate HTML elements (e.g. <div>, <h2>, <p>).
+- Do not include any extra text.
 
-    logging.info(f"Requesting explanation for '{title}'")
+Provide a short, clear explanation on this topic in the context of cybersecurity certifications and training."""
+    
+    logging.info(f"Requesting explanation for node: {title} with profile:\n{profile_text or 'No extra profile provided.'}")
     try:
         resp = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt
         )
-        html = resp.text.strip() or "<div>No explanation available.</div>"
-        return Response(html, mimetype="text/html")
+        html_response = resp.text.strip() or "<div>No explanation found.</div>"
+        return Response(html_response, status=200, mimetype="text/html")
     except Exception as e:
-        logging.exception("Error generating explanation")
-        return Response(
-            f"<p style='color:red;'>Error generating explanation: {e}</p>",
-            status=500,
-            mimetype="text/html"
-        )
+        logging.exception("Error during node explanation")
+        return f"<p style='color:red;'>❌ Error: {e}</p>", 500, {"Content-Type": "text/html"}
 
 
 # -----------------------------------------------------------------------------
